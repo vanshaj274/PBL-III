@@ -1,0 +1,226 @@
+esphome:
+  name: wattbox
+  platform: ESP32
+  board: nodemcu-32s
+  # on_boot:
+  #   - switch.turn_on: led_1
+  # on_shutdown:
+  #   then:
+  #     - switch.turn_off: led_1
+
+wifi:
+  ssid: "!secret"
+  password: "!secret"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "!secret"
+    password: "!secret"
+
+captive_portal:
+
+# Enable Home Assistant API
+api:
+  password: "!secret"
+
+ota:
+  password: "!secret"
+  
+logger:
+
+# deep_sleep:
+#   wakeup_pin:
+#       number: GPIO4
+#   id: deep_sleep_1
+#   wakeup_pin_mode: KEEP_AWAKE
+  
+# binary_sensor:
+#   - platform: gpio
+#     pin:
+#       number: GPIO4
+#       mode: INPUT_PULLDOWN
+#     name: Accessory Power
+#     id: accessory_power
+#     filters:
+#       - delayed_on_off: 500 ms
+
+# switch:
+#   - platform: template
+#     name: "Template Switch"
+#     lambda: |-
+#       if (id(accessory_power).state) {
+#         return true;
+#       } else {
+#         return false;
+#       }
+#     on_turn_off:
+#         - deep_sleep.enter: deep_sleep_1
+      
+#   - platform: gpio
+#     pin: GPIO2
+#     name: "led"
+#     id: led_1
+    
+# web_server:
+#   port: 80
+ 
+# light: 
+#   - platform: neopixelbus
+#     type: RGB
+#     pin: GPIO25
+#     num_leds: 46
+#     color_correct: [100%, 90%, 90%]
+#     gamma_correct: 2.9
+#     name: "Ambient light"
+#     method: ESP32_I2S_1
+#     effects: 
+#       - addressable_random_twinkle:
+#       - addressable_fireworks:
+#       - addressable_flicker: 
+#       - addressable_rainbow:
+#       - addressable_scan:
+#       - addressable_color_wipe:
+#           name: Color Wipe
+#           colors:
+#             - red: 100%
+#               green: 85%
+#               blue: 73%
+#               num_leds: 15
+#             - red: 0%
+#               green: 93%
+#               blue: 93%
+#               num_leds: 15
+#             - red: 49%
+#               green: 15%
+#               blue: 80%
+#               num_leds: 15
+#           add_led_interval: 75ms
+#           reverse: False
+#       - addressable_twinkle:
+#           name: Twinkle Effect
+#           twinkle_probability: 50%
+#           progress_interval: 4ms
+
+# light:
+#   - platform: fastled_clockless
+#     chipset: WS2812b
+#     pin: GPIO25
+#     num_leds: 1
+#     rgb_order: BRG
+#     name: "FastLED WS2811 Light"
+i2c:
+  sda: 21
+  scl: 22
+  scan: true
+  id: bus_a
+
+sensor:
+  - platform: ina219
+    address: 0x40
+    shunt_resistance: 0.1 ohm
+    current:
+      name: "Solar Panel Current"
+    power:
+      name: "Solar Panel Power"
+      device_class: power
+    bus_voltage:
+      name: "Solar Panel Voltage"
+    shunt_voltage:
+      name: "INA219 Shunt Voltage"
+    max_voltage: 32.0V
+    max_current: 3.2A
+    update_interval: 2s
+    
+  - platform: template
+    name: "Load"
+    unit_of_measurement: "W"
+    device_class: power
+    lambda: |-
+      return (id(battery_amps).state * id(battery_volts).state);
+    update_interval: 2s
+
+  - platform: adc
+    pin: GPIO33
+    name: "Battery Voltage"
+    id: battery_volts
+    attenuation: 11db
+    update_interval: 4s
+    filters:
+    - sliding_window_moving_average:
+        window_size: 5
+        send_every: 5
+    - calibrate_linear:
+          # Map 0.0 (from sensor) to 0.0 (true value)
+          - 0.0 -> 0.0
+          - 2.70 -> 11.47
+
+  - platform: adc
+    pin: GPIO32
+    name: "Battery Amps_temp"
+    id: battery_amps_temp
+    attenuation: 11db
+    update_interval: 2s
+    unit_of_measurement: "A"
+    filters:
+     - sliding_window_moving_average:
+         window_size: 5
+         send_every: 3
+    # - lambda: return x - 1.74500
+     - throttle: 5s
+     - calibrate_linear:
+      # Map 0.0 (from sensor) to 0.0 (true value)
+        - 1.74500 -> 0.00
+        - 1.76762 -> 0.04
+        - 1.87238 -> 3.88
+     
+  - platform: template
+    name: "Battery Amps"
+    id: battery_amps
+    lambda: |-
+      if ((id(battery_amps_temp).state) >= 0.20) {
+        return (id(battery_amps_temp).state);
+      } else {
+        return 0.0;
+      }
+    update_interval: 3s
+    accuracy_decimals: 2
+
+  # - platform: adc
+  #   id: button_adc
+  #   name: button
+  #   pin: 34
+  #   update_interval: .2s
+
+# output:
+#   - platform: gpio
+#     id: battery_relay
+#     pin: GPIO26
+#   - platform: gpio
+#     id: solar_relay
+#     pin: GPIO25
+
+switch:
+  - platform: gpio
+    pin: GPIO26
+    name: "Solar"
+    id: relay1
+
+  - platform: gpio
+    pin: GPIO25
+    name: "Battery"
+    id: relay2
+    
+binary_sensor:
+  - platform: gpio
+    id: lid
+    device_class: door
+    pin:
+      number: 34
+      mode: INPUT_PULLDOWN
+    name: "Cover state"
+    
+# binary_sensor:
+#   - platform: template
+#     id: lid
+#     name: "Cover state"
+#     lambda: return (id(button_adc).state < .5);

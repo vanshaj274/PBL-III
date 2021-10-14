@@ -1,0 +1,49 @@
+esphome:
+  name: irrigation-controller
+  platform: ESP8266
+  board: nodemcuv2
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+
+ota:
+  password: "!secret"
+
+wifi:
+  ssid: "!secret"
+  password: "!secret"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Irrigation-Controller"
+    password: "!secret"
+
+captive_portal:
+
+sensor:
+  - platform: adc
+    pin: A0
+    id: moisture_sensor
+    name: "Soil Moisture"
+    unit_of_measurement: "%"
+    update_interval: 2s
+    filters:
+# Sensor dry around 0.825 Volt, sensor wet around 0.425 Volt. Volts are were flickering
+       - calibrate_linear:
+          - 0.825 -> 0.0
+          - 0.425 -> 100.0
+  - platform: dallas
+    address: 0xE23C01F09578E628
+    name: "Ambient Temperature"
+          
+dallas:
+  - pin: GPIO10
+  
+switch:
+  - platform: gpio
+    pin: D2
+    name: "Sprinkler"
+    id: solenoid1
